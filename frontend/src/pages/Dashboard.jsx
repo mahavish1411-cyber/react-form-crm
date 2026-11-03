@@ -1,14 +1,12 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../api/client";
 
 function Dashboard() {
   const [employees, setEmployees] = useState([]);
 
   const fetchEmployees = async () => {
     try {
-      const response = await axios.get(
-        "http://localhost:5000/api/employees"
-      );
+      const response = await api.get("/employees");
 
       setEmployees(response.data.data || []);
     } catch (error) {

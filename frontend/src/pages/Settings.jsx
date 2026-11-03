@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import api from '../api/client';
 import Icon from '../components/WorkspaceIcon';
 import { defaultPreferences, downloadText, readPreferences, savePreferences } from '../utils/workspacePreferences';
 import './WorkspacePages.css';
@@ -78,10 +79,8 @@ export default function Settings() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8000);
     try {
-      const base = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:5000/api`;
-      const response = await fetch(`${base}/employees`, { signal: controller.signal });
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error();
+      const response = await api.get('/employees', { signal: controller.signal });
+      if (!response.data?.success) throw new Error();
       setConnection('Connected. Employee data is available from your backend.');
     } catch { setConnection('Connection unavailable. Start the backend and verify the configured MongoDB connection.'); }
     finally { clearTimeout(timer); setChecking(false); }
