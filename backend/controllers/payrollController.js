@@ -4,649 +4,54 @@ const Payroll = require("../models/Payroll");
 const Employee = require("../models/Employee");
 const Attendance = require("../models/Attendance");
 
-// ==========================================
-// CONFIG
-// ==========================================
+const calc = require("../services/payrollCalculator");
+const { EMPLOYEE_POPULATE_FIELDS } = require("../constants/populateFields");
 
-const HALF_DAY_MINUTES = 240;
+const isValidMonth = calc.isValidMonth;
 
-// ==========================================
-// HELPER - LOCAL DATE YYYY-MM-DD
-// ==========================================
+const getTodayDate = () => calc.getDateString(new Date());
 
-const getDateString = (dateValue = new Date()) => {
-  const date = new Date(dateValue);
+const monthAttendanceFilter = (month) => ({ $regex: `^${month}-` });
 
-  const year = date.getFullYear();
-
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, "0");
-
-  const day = String(
-    date.getDate()
-  ).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-};
-
-// ==========================================
-// HELPER - TODAY
-// ==========================================
-
-const getTodayDate = () => {
-  return getDateString(new Date());
-};
-
-// ==========================================
-// HELPER - VALID MONTH
-// ==========================================
-
-const isValidMonth = (month) => {
-  if (
-    !month ||
-    !/^\d{4}-\d{2}$/.test(month)
-  ) {
-    return false;
-  }
-
-  const monthNumber =
-    Number(month.slice(5, 7));
-
-  return (
-    monthNumber >= 1 &&
-    monthNumber <= 12
-  );
-};
-
-// ==========================================
-// HELPER - TOTAL BREAK MINUTES
-// ==========================================
-
-const calculateTotalBreakMinutes = (
-  breaks = []
-) => {
-  if (!Array.isArray(breaks)) {
-    return 0;
-  }
-
-  let totalMilliseconds = 0;
-
-  breaks.forEach((breakItem) => {
-    if (
-      !breakItem.start ||
-      !breakItem.end
-    ) {
-      return;
-    }
-
-    const start =
-      new Date(
-        breakItem.start
-      ).getTime();
-
-    const end =
-      new Date(
-        breakItem.end
-      ).getTime();
-
-    if (
-      Number.isNaN(start) ||
-      Number.isNaN(end) ||
-      end <= start
-    ) {
-      return;
-    }
-
-    totalMilliseconds +=
-      end - start;
-  });
-
-  return Math.floor(
-    totalMilliseconds / 60000
-  );
-};
-
-// ==========================================
-// HELPER - WORKING MINUTES
-// ==========================================
-
-const calculateWorkingMinutes = (
-  record
-) => {
-  if (
-    !record?.checkIn ||
-    !record?.checkOut
-  ) {
-    return 0;
-  }
-
-  const checkIn =
-    new Date(
-      record.checkIn
-    ).getTime();
-
-  const checkOut =
-    new Date(
-      record.checkOut
-    ).getTime();
-
-  if (
-    Number.isNaN(checkIn) ||
-    Number.isNaN(checkOut) ||
-    checkOut <= checkIn
-  ) {
-    return 0;
-  }
-
-  const totalMinutes =
-    Math.floor(
-      (checkOut - checkIn) /
-        60000
-    );
-
-  const breakMinutes =
-    calculateTotalBreakMinutes(
-      record.breaks
-    );
-
-  return Math.max(
-    totalMinutes - breakMinutes,
-    0
-  );
-};
-
-// ==========================================
-// HELPER - RESOLVE FINAL STATUS
-// ==========================================
-
-const resolveFinalStatus = (
-  record
-) => {
-  if (!record?.checkOut) {
-    return null;
-  }
-
-  let workingMinutes =
-    Number(
-      record.workingMinutes || 0
-    );
-
-  // Support older attendance records
-  if (workingMinutes === 0) {
-    workingMinutes =
-      calculateWorkingMinutes(
-        record
-      );
-  }
-
-  const lateMinutes =
-    Number(
-      record.lateMinutes || 0
-    );
-
-  if (
-    workingMinutes <
-    HALF_DAY_MINUTES
-  ) {
-    return "Half Day";
-  }
-
-  if (lateMinutes > 0) {
-    return "Late";
-  }
-
-  return "Present";
-};
-
-// ==========================================
-// HELPER - SCHEDULED WORKING DATES
-// ==========================================
-//
-// IMPORTANT:
-//
-// Salary denominator always uses ALL
-// Monday-Friday dates in selected month.
-//
-// Example:
-//
-// September 2026 = 22 Mon-Fri days
-//
-// Gross = 33000
-//
-// Per Day = 33000 / 22
-//
-// ==========================================
-
-const getScheduledWorkingDatesForMonth = (
-  month
-) => {
-  const [
-    year,
-    monthNumber,
-  ] = month
-    .split("-")
-    .map(Number);
-
-  const lastDayOfMonth =
-    new Date(
-      year,
-      monthNumber,
-      0
-    ).getDate();
-
-  const scheduledWorkingDates = [];
-
-  for (
-    let day = 1;
-    day <= lastDayOfMonth;
-    day += 1
-  ) {
-    const date =
-      new Date(
-        year,
-        monthNumber - 1,
-        day
-      );
-
-    const dayOfWeek =
-      date.getDay();
-
-    // Sunday = 0
-    // Saturday = 6
-    //
-    // Monday-Friday only
-    if (
-      dayOfWeek !== 0 &&
-      dayOfWeek !== 6
-    ) {
-      scheduledWorkingDates.push(
-        getDateString(date)
-      );
-    }
-  }
-
-  return scheduledWorkingDates;
-};
-
-// ==========================================
-// HELPER - ATTENDANCE EVALUATION DATES
-// ==========================================
-//
-// Past month:
-//   Check all scheduled working dates.
-//
-// Current month:
-//   Check completed working dates.
-//
-//   Today is evaluated only when an
-//   attendance record already exists.
-//
-// Future month:
-//   Do not mark anyone absent.
-//
-// ==========================================
-
-const getAttendanceEvaluationDates = (
-  month,
-  scheduledWorkingDates,
-  attendanceDates = new Set()
-) => {
-  const today =
-    getTodayDate();
-
-  const currentMonth =
-    today.slice(0, 7);
-
-  // Past month
-  if (month < currentMonth) {
-    return scheduledWorkingDates;
-  }
-
-  // Future month
-  if (month > currentMonth) {
-    return [];
-  }
-
-  // Current month
-  return scheduledWorkingDates.filter(
-    (workingDate) => {
-      if (workingDate < today) {
-        return true;
-      }
-
-      if (
-        workingDate === today &&
-        attendanceDates.has(today)
-      ) {
-        return true;
-      }
-
-      return false;
-    }
-  );
-};
-
-// ==========================================
-// HELPER - ATTENDANCE SUMMARY
-// ==========================================
-
-const calculateAttendanceSummary =
-  async (
-    employeeId,
-    month
-  ) => {
-    const attendance =
-      await Attendance.find({
-        employee:
-          employeeId,
-
-        date: {
-          $regex:
-            `^${month}-`,
-        },
-      }).sort({
-        date: 1,
-      });
-
-    const attendanceMap =
-      new Map();
-
-    const attendanceDates =
-      new Set();
-
-    attendance.forEach(
-      (record) => {
-        attendanceMap.set(
-          record.date,
-          record
-        );
-
-        attendanceDates.add(
-          record.date
-        );
-      }
-    );
-
-    // ========================================
-    // FULL MONTH WORKING DAYS
-    // ========================================
-
-    const scheduledWorkingDates =
-      getScheduledWorkingDatesForMonth(
-        month
-      );
-
-    // ========================================
-    // DAYS ELIGIBLE FOR ATTENDANCE CHECK
-    // ========================================
-
-    const evaluationDates =
-      getAttendanceEvaluationDates(
-        month,
-        scheduledWorkingDates,
-        attendanceDates
-      );
-
-    let presentDays = 0;
-    let lateDays = 0;
-    let halfDays = 0;
-    let absentDays = 0;
-
-    evaluationDates.forEach(
-      (workingDate) => {
-        const record =
-          attendanceMap.get(
-            workingDate
-          );
-
-        // No attendance on completed
-        // working day = Absent
-        if (!record) {
-          absentDays += 1;
-          return;
-        }
-
-        const finalStatus =
-          resolveFinalStatus(
-            record
-          );
-
-        if (
-          finalStatus ===
-          "Half Day"
-        ) {
-          halfDays += 1;
-        } else if (
-          finalStatus ===
-          "Late"
-        ) {
-          lateDays += 1;
-        } else if (
-          finalStatus ===
-          "Present"
-        ) {
-          presentDays += 1;
-        }
-      }
-    );
-
-    return {
-      // Full month's Mon-Fri count
-      workingDays:
-        scheduledWorkingDates.length,
-
-      // Current elapsed/evaluated
-      // working days
-      elapsedWorkingDays:
-        evaluationDates.length,
-
-      presentDays,
-      lateDays,
-      halfDays,
-      absentDays,
-    };
-  };
-
-// ==========================================
-// HELPER - CALCULATE PAYROLL VALUES
-// ==========================================
-
-const calculatePayrollValues =
-  async ({
+// Pure computation from already-loaded attendance records.
+const computePayrollValues = ({ employee, month, records, manualOtherDeduction = 0 }) => {
+  const summary = calc.summarizeAttendance({ month, records, today: getTodayDate() });
+  const payroll = calc.calculatePayroll({
     employee,
-    month,
-    manualOtherDeduction = 0,
-  }) => {
-    const attendanceSummary =
-      await calculateAttendanceSummary(
-        employee._id,
-        month
-      );
+    summary,
+    otherDeduction: manualOtherDeduction,
+  });
+  return { ...summary, ...payroll };
+};
 
-    const basicSalary =
-      Number(
-        employee.basicSalary || 0
-      );
+const calculatePayrollValues = async ({ employee, month, manualOtherDeduction = 0 }) => {
+  const records = await Attendance.find({
+    employee: employee._id,
+    date: monthAttendanceFilter(month),
+  }).sort({ date: 1 });
+  return computePayrollValues({ employee, month, records, manualOtherDeduction });
+};
 
-    const allowance =
-      Number(
-        employee.allowance || 0
-      );
-
-    // ========================================
-    // EMPLOYEE FIXED DEDUCTION
-    // ========================================
-
-    const employeeDeduction =
-      Number(
-        employee.deduction || 0
-      );
-
-    // ========================================
-    // MANUAL OTHER DEDUCTION
-    // ========================================
-
-    const otherDeduction =
-      Number(
-        manualOtherDeduction || 0
-      );
-
-    // ========================================
-    // GROSS SALARY
-    // ========================================
-
-    const grossSalary =
-      basicSalary +
-      allowance;
-
-    // ========================================
-    // FULL MONTH WORKING DAYS
-    // ========================================
-
-    const workingDays =
-      attendanceSummary.workingDays;
-
-    // ========================================
-    // PER DAY SALARY
-    // ========================================
-
-    const perDaySalary =
-      workingDays > 0
-        ? grossSalary /
-          workingDays
-        : 0;
-
-    // ========================================
-    // ABSENT DEDUCTION
-    // ========================================
-
-    const absentDeduction =
-      perDaySalary *
-      attendanceSummary.absentDays;
-
-    // ========================================
-    // HALF DAY DEDUCTION
-    // ========================================
-
-    const halfDayDeduction =
-      perDaySalary *
-      0.5 *
-      attendanceSummary.halfDays;
-
-    // ========================================
-    // ATTENDANCE DEDUCTION
-    // ========================================
-
-    const rawAttendanceDeduction =
-      absentDeduction +
-      halfDayDeduction;
-
-    // Attendance deduction cannot
-    // exceed gross salary.
-    const attendanceDeduction =
-      Math.min(
-        rawAttendanceDeduction,
-        grossSalary
-      );
-
-    // ========================================
-    // TOTAL DEDUCTION
-    // ========================================
-
-    const rawTotalDeduction =
-      attendanceDeduction +
-      employeeDeduction +
-      otherDeduction;
-
-    // Total deduction cannot exceed
-    // gross salary.
-    const totalDeduction =
-      Math.min(
-        rawTotalDeduction,
-        grossSalary
-      );
-
-    // ========================================
-    // NET SALARY
-    // ========================================
-
-    const netSalary =
-      Math.max(
-        grossSalary -
-          totalDeduction,
-        0
-      );
-
-    return {
-      workingDays:
-        attendanceSummary.workingDays,
-
-      presentDays:
-        attendanceSummary.presentDays,
-
-      lateDays:
-        attendanceSummary.lateDays,
-
-      halfDays:
-        attendanceSummary.halfDays,
-
-      absentDays:
-        attendanceSummary.absentDays,
-
-      basicSalary:
-        Number(
-          basicSalary.toFixed(2)
-        ),
-
-      allowance:
-        Number(
-          allowance.toFixed(2)
-        ),
-
-      grossSalary:
-        Number(
-          grossSalary.toFixed(2)
-        ),
-
-      attendanceDeduction:
-        Number(
-          attendanceDeduction.toFixed(2)
-        ),
-
-      // IMPORTANT:
-      // Employee fixed deduction is now
-      // returned AND stored in Payroll.
-      employeeDeduction:
-        Number(
-          employeeDeduction.toFixed(2)
-        ),
-
-      // Manual deduction only
-      otherDeduction:
-        Number(
-          otherDeduction.toFixed(2)
-        ),
-
-      totalDeduction:
-        Number(
-          totalDeduction.toFixed(2)
-        ),
-
-      netSalary:
-        Number(
-          netSalary.toFixed(2)
-        ),
-
-      perDaySalary:
-        Number(
-          perDaySalary.toFixed(2)
-        ),
-
-      elapsedWorkingDays:
-        attendanceSummary.elapsedWorkingDays,
-    };
-  };
+const payrollDocFromValues = (employeeId, month, values, remarks) => ({
+  employee: employeeId,
+  month,
+  workingDays: values.workingDays,
+  presentDays: values.presentDays,
+  lateDays: values.lateDays,
+  halfDays: values.halfDays,
+  absentDays: values.absentDays,
+  basicSalary: values.basicSalary,
+  allowance: values.allowance,
+  grossSalary: values.grossSalary,
+  attendanceDeduction: values.attendanceDeduction,
+  employeeDeduction: values.employeeDeduction,
+  otherDeduction: values.otherDeduction,
+  totalDeduction: values.totalDeduction,
+  netSalary: values.netSalary,
+  paymentStatus: "Pending",
+  paidDate: null,
+  remarks,
+});
 
 // ==========================================
 // GENERATE SINGLE PAYROLL
@@ -798,7 +203,7 @@ const generatePayroll = async (
         payroll._id
       ).populate(
         "employee",
-        "employeeId name email department designation basicSalary allowance deduction"
+        EMPLOYEE_POPULATE_FIELDS
       );
 
     return res.status(201).json({
@@ -842,214 +247,121 @@ const generatePayroll = async (
 // ==========================================
 // GENERATE PAYROLL FOR ALL ACTIVE EMPLOYEES
 // ==========================================
+//
+// Fixed number of queries regardless of employee count:
+// employees, existing payrolls, month attendance, insertMany, populate.
 
-const generateAllPayrolls = async (
-  req,
-  res
-) => {
+const generateAllPayrolls = async (req, res) => {
   try {
-    const {
-      month,
-      otherDeduction = 0,
-      remarks = "",
-    } = req.body;
+    const { month, otherDeduction = 0, remarks = "" } = req.body;
 
     if (!month) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Month is required",
-      });
+      return res.status(400).json({ success: false, message: "Month is required" });
     }
-
     if (!isValidMonth(month)) {
       return res.status(400).json({
         success: false,
-        message:
-          "Month must use YYYY-MM format",
+        message: "Month must use YYYY-MM format",
       });
     }
 
-    const employees =
-      await Employee.find({
-        status:
-          "Active",
-      });
-
+    const employees = await Employee.find({ status: "Active" });
     if (!employees.length) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "No active employees found",
-      });
+      return res.status(404).json({ success: false, message: "No active employees found" });
     }
 
-    const createdPayrolls = [];
+    const ids = employees.map((e) => e._id);
+
+    const existing = await Payroll.find({ employee: { $in: ids }, month });
+    const existingIds = new Set(existing.map((p) => String(p.employee)));
+
     const skippedEmployees = [];
     const failedEmployees = [];
+    const toCreate = employees.filter((employee) => {
+      if (existingIds.has(String(employee._id))) {
+        skippedEmployees.push({
+          employeeId: employee.employeeId,
+          name: employee.name,
+          reason: "Payroll already exists",
+        });
+        return false;
+      }
+      return true;
+    });
 
-    for (
-      const employee of employees
-    ) {
+    const recordsByEmployee = new Map();
+    if (toCreate.length) {
+      const records = await Attendance.find({
+        employee: { $in: toCreate.map((e) => e._id) },
+        date: monthAttendanceFilter(month),
+      });
+      for (const record of records) {
+        const key = String(record.employee);
+        if (!recordsByEmployee.has(key)) recordsByEmployee.set(key, []);
+        recordsByEmployee.get(key).push(record);
+      }
+    }
+
+    const docs = [];
+    const docEmployees = [];
+    for (const employee of toCreate) {
       try {
-        const existingPayroll =
-          await Payroll.findOne({
-            employee:
-              employee._id,
-
-            month,
-          });
-
-        if (existingPayroll) {
-          skippedEmployees.push({
-            employeeId:
-              employee.employeeId,
-
-            name:
-              employee.name,
-
-            reason:
-              "Payroll already exists",
-          });
-
-          continue;
-        }
-
-        const values =
-          await calculatePayrollValues({
-            employee,
-
-            month,
-
-            manualOtherDeduction:
-              Number(
-                otherDeduction || 0
-              ),
-          });
-
-        const payroll =
-          await Payroll.create({
-            employee:
-              employee._id,
-
-            month,
-
-            workingDays:
-              values.workingDays,
-
-            presentDays:
-              values.presentDays,
-
-            lateDays:
-              values.lateDays,
-
-            halfDays:
-              values.halfDays,
-
-            absentDays:
-              values.absentDays,
-
-            basicSalary:
-              values.basicSalary,
-
-            allowance:
-              values.allowance,
-
-            grossSalary:
-              values.grossSalary,
-
-            attendanceDeduction:
-              values.attendanceDeduction,
-
-            // NEW
-            employeeDeduction:
-              values.employeeDeduction,
-
-            otherDeduction:
-              values.otherDeduction,
-
-            totalDeduction:
-              values.totalDeduction,
-
-            netSalary:
-              values.netSalary,
-
-            paymentStatus:
-              "Pending",
-
-            paidDate:
-              null,
-
-            remarks:
-              remarks ||
-              `${month} Payroll`,
-          });
-
-        const populatedPayroll =
-          await Payroll.findById(
-            payroll._id
-          ).populate(
-            "employee",
-            "employeeId name email department designation basicSalary allowance deduction"
-          );
-
-        createdPayrolls.push(
-          populatedPayroll
+        const values = computePayrollValues({
+          employee,
+          month,
+          records: recordsByEmployee.get(String(employee._id)) || [],
+          manualOtherDeduction: Number(otherDeduction || 0),
+        });
+        docs.push(
+          payrollDocFromValues(employee._id, month, values, remarks || `${month} Payroll`)
         );
+        docEmployees.push(employee);
       } catch (error) {
         failedEmployees.push({
-          employeeId:
-            employee.employeeId,
-
-          name:
-            employee.name,
-
-          error:
-            error.message,
+          employeeId: employee.employeeId,
+          name: employee.name,
+          error: error.message,
         });
+      }
+    }
+
+    let createdPayrolls = [];
+    if (docs.length) {
+      try {
+        const inserted = await Payroll.insertMany(docs);
+        createdPayrolls = await Payroll.find({
+          _id: { $in: inserted.map((p) => p._id) },
+        }).populate("employee", EMPLOYEE_POPULATE_FIELDS);
+      } catch (error) {
+        docEmployees.forEach((employee) =>
+          failedEmployees.push({
+            employeeId: employee.employeeId,
+            name: employee.name,
+            error: error.message,
+          })
+        );
       }
     }
 
     return res.status(201).json({
       success: true,
-
-      message:
-        "Bulk payroll generation completed",
-
+      message: "Bulk payroll generation completed",
       summary: {
-        totalEmployees:
-          employees.length,
-
-        created:
-          createdPayrolls.length,
-
-        skipped:
-          skippedEmployees.length,
-
-        failed:
-          failedEmployees.length,
+        totalEmployees: employees.length,
+        created: createdPayrolls.length,
+        skipped: skippedEmployees.length,
+        failed: failedEmployees.length,
       },
-
       createdPayrolls,
-
       skippedEmployees,
-
       failedEmployees,
     });
   } catch (error) {
-    console.error(
-      "Generate all payrolls error:",
-      error
-    );
-
+    console.error("Generate all payrolls error:", error);
     return res.status(500).json({
       success: false,
-
-      message:
-        "Unable to generate bulk payroll",
-
-      error:
-        error.message,
+      message: "Unable to generate bulk payroll",
+      error: error.message,
     });
   }
 };
@@ -1224,7 +536,7 @@ const recalculatePayroll =
           payroll._id
         ).populate(
           "employee",
-          "employeeId name email department designation basicSalary allowance deduction"
+          EMPLOYEE_POPULATE_FIELDS
         );
 
       return res
@@ -1301,7 +613,7 @@ const getPayrolls = async (
       )
         .populate(
           "employee",
-          "employeeId name email department designation basicSalary allowance deduction"
+          EMPLOYEE_POPULATE_FIELDS
         )
         .sort({
           createdAt:
@@ -1364,7 +676,7 @@ const getPayrollById = async (
         req.params.id
       ).populate(
         "employee",
-        "employeeId name email department designation basicSalary allowance deduction"
+        EMPLOYEE_POPULATE_FIELDS
       );
 
     if (!payroll) {
@@ -1463,7 +775,7 @@ const markPayrollPaid = async (
         payroll._id
       ).populate(
         "employee",
-        "employeeId name email department designation basicSalary allowance deduction"
+        EMPLOYEE_POPULATE_FIELDS
       );
 
     return res.status(200).json({
