@@ -1,0 +1,92 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Build files
+dist/
+build/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Browser testing cache
+.playwright/
+playwright-report/
+test-results/
+browser-profile/
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Build files
+dist/
+build/
+coverage/
+
+# ZIP files
+*.zip
+
+# Generated artifacts
+artifacts/
+
+# Browser cache and tests
+.playwright/
+playwright-report/
+test-results/
+browser-profile/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Browser testing profiles
+.browser-payroll-test/
+**/.browser-payroll-test/
+
+# Browser cache
+**/Cache/
+**/Code Cache/
+**/GPUCache/
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# ZIP and generated files
+*.zip
+artifacts/
+
+frontend/.browser-payroll-tools/git rm -r --cached --ignore-unmatch frontend/.browser-payroll-tools
