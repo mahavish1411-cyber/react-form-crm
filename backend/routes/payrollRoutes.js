@@ -9,6 +9,14 @@ const {
   markPayrollPaid,
 } = require("../controllers/payrollController");
 
+const { validate } = require("../middleware/validate");
+const {
+  payrollGenerate,
+  payrollGenerateAll,
+  payrollRecalculate,
+  payrollListQuery,
+} = require("../validation/schemas");
+
 const router = express.Router();
 
 // ==========================================
@@ -20,6 +28,7 @@ const router = express.Router();
 
 router.get(
   "/",
+  validate(payrollListQuery, "query"),
   getPayrolls
 );
 
@@ -30,6 +39,7 @@ router.get(
 
 router.post(
   "/generate-all",
+  validate(payrollGenerateAll),
   generateAllPayrolls
 );
 
@@ -40,6 +50,7 @@ router.post(
 
 router.post(
   "/generate",
+  validate(payrollGenerate),
   generatePayroll
 );
 
@@ -50,6 +61,7 @@ router.post(
 
 router.put(
   "/:id/recalculate",
+  validate(payrollRecalculate),
   recalculatePayroll
 );
 
