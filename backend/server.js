@@ -14,6 +14,7 @@ const employeeRoutes = require("./routes/employeeRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
 const authRoutes = require("./routes/authRoutes");
+const { startDemoLifecycle } = require("./scripts/demoLifecycle");
 const helmet = require("helmet");
 const { requireAuth, requireWrite } = require("./middleware/auth");
 const { writeLimiter } = require("./middleware/rateLimits");
@@ -44,6 +45,7 @@ async function connectDatabase() {
     databaseError = null;
     retryCount = 0;
     console.log('MongoDB connected. CRM API is ready.');
+    startDemoLifecycle();
   } catch (error) {
     databaseError = describeDatabaseError(error);
     console.error(`${databaseError.code}: ${databaseError.message}`);
