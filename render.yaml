@@ -14,4 +14,8 @@ services:
       - key: CORS_ORIGINS
         sync: false
       - key: DEMO_MODE
+        value: "false"
+      - key: DEMO_LOGIN
         value: "true"
+      - key: DEMO_ROLE
+        value: "admin"

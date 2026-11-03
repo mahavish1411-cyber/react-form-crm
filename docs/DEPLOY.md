@@ -4,13 +4,15 @@ Stack: **MongoDB Atlas** (database) → **Render** (API) → **Vercel** (fronten
 
 ## 1. MongoDB Atlas
 
-1. Create a free **M0** cluster.
-2. *Database Access* → add a user with a strong password (read/write on any database). URL-encode special characters in the password.
-3. *Network Access* → allow `0.0.0.0/0` (Render free tier has no fixed IP; the demo holds only fake data).
-4. *Connect → Drivers* → copy the connection string and add a database name, e.g.
-   `mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/crm_demo?retryWrites=true&w=majority`
+This deployment **uses the data already in your Atlas cluster as-is** (no seeding, no resets).
 
-> Use a **dedicated demo database**. The server wipes and re-seeds it daily when `DEMO_MODE=true`. Never point a demo deployment at real data.
+1. Use your existing free **M0** cluster (Atlas allows one free cluster per organization).
+2. *Database Access* → add a user with **readWrite on your CRM database only** (*Specific Privileges*). Use a password without special characters (or URL-encode them).
+3. *Network Access* → allow `0.0.0.0/0` (Render's free tier has no fixed IP).
+4. *Connect → Drivers* → copy the connection string and put your database name before the `?` (the name is case-sensitive), e.g.
+   `mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/crmDB?retryWrites=true&w=majority`
+
+> Visitors who click **Try the demo** act on this live data. With `DEMO_ROLE=admin` they can add, edit and delete records, and nothing resets automatically. Use `DEMO_ROLE=viewer` for a read-only demo, or take an Atlas backup / export first.
 
 ## 2. Render (backend)
 
@@ -23,9 +25,11 @@ Stack: **MongoDB Atlas** (database) → **Render** (API) → **Vercel** (fronten
 | `MONGODB_URI` | the Atlas string from step 1 |
 | `JWT_SECRET` | a long random string (e.g. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`) |
 | `CORS_ORIGINS` | `https://YOUR-APP.vercel.app,https://*.vercel.app` (comma separated; `*` allowed for preview URLs) |
-| `DEMO_MODE` | `true` |
+| `DEMO_MODE` | `false` (never `true` on a database you want to keep: it wipes and re-seeds it) |
+| `DEMO_LOGIN` | `true` (enables the one-click **Try the demo** button on existing data) |
+| `DEMO_ROLE` | `admin` (full access) or `viewer` (read-only) |
 
-4. Deploy. When the database connects, the server **seeds the demo data automatically** if no demo user exists, and resets it daily at 03:00 UTC (and on wake-up if the data is older than 24h).
+4. Deploy. When the database connects, the server creates a demo login user if one doesn't exist. It never deletes or changes your other data.
 5. Check `https://YOUR-SERVICE.onrender.com/api/health` → `{"success":true,"database":"connected"}`.
 
 **Cold starts:** the free tier sleeps after ~15 minutes idle and takes up to a minute to wake. The frontend shows a "Waking up the demo server" banner. Optionally ping `/api/health` every 10 minutes with a free uptime monitor to keep it warm.
@@ -40,17 +44,19 @@ Stack: **MongoDB Atlas** (database) → **Render** (API) → **Vercel** (fronten
 ## 4. Verify
 
 1. Open the Vercel URL → login page → **Try the demo**.
-2. Dashboard shows 12 employees; Payroll for the previous two months is already generated; the current month can be generated.
+2. The dashboard and pages show the employees, attendance and payroll already in your Atlas database.
 3. In another browser profile, `GET /api/employees` without a token returns `401`.
 
-## Running a manual reset / local seed
+## Optional: a fully seeded, self-resetting demo
+
+For a throwaway database only, set `DEMO_MODE=true`. The server then **wipes and re-seeds** that database (12 fake employees, 3 months of attendance, payroll for the two previous months) when no demo user exists, and again daily at 03:00 UTC or on wake-up if the data is older than 24h. A manual run:
 
 ```bash
 cd backend
-DEMO_MODE=true MONGODB_URI="<demo db uri>" npm run seed
+DEMO_MODE=true MONGODB_URI="<throwaway db uri>" npm run seed
 ```
 
-The script refuses to run unless `DEMO_MODE` is exactly `true`.
+The seed script refuses to run unless `DEMO_MODE` is exactly `true`.
 
 ## Local development
 

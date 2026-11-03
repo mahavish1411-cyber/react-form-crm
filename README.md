@@ -2,7 +2,7 @@
 
 A full-stack HR workspace: manage employees, track daily attendance, and generate monthly payroll with printable payslips.
 
-**One-click demo:** open the app and choose **Try the demo** on the sign-in page. No account is needed. Demo data is fictional and resets automatically every day.
+**One-click demo:** open the app and choose **Try the demo** on the sign-in page. No account is needed. Visitors work with the live data in the connected database.
 
 > The app runs on free-tier hosting. After a period of inactivity the first request can take up to a minute while the API wakes up, and the interface shows a notice while that happens.
 
@@ -14,15 +14,15 @@ A full-stack HR workspace: manage employees, track daily attendance, and generat
 - **Payroll** — single or bulk generation, recalculation, paid/pending tracking, payslips (print / save as PDF)
 - **Reports, Settings, Help Center**
 - **Auth** — JWT login, one-click demo login, `admin` (full) and `viewer` (read-only) roles
-- **Safe public demo** — rate-limited writes, validated input, seeded fake data, automatic daily reset
+- **Safe public demo** — rate-limited writes, validated input, seeded fake data, either your existing Atlas data or a seeded, self-resetting demo database
 
 ## Architecture
 
 ```text
 Vercel (React + Vite)  ──HTTPS──▶  Render (Express API)  ──▶  MongoDB Atlas
         │                               │  JWT auth, validation, rate limits
-        └─ shared axios client          └─ demo lifecycle: seed on empty DB,
-           (VITE_API_URL, token,           reset daily 03:00 UTC / on wake-up
+        └─ shared axios client          └─ demo login user bootstrap; optional
+           (VITE_API_URL, token,           seeded self-resetting demo mode
             "waking up" banner)
 ```
 
@@ -32,7 +32,7 @@ backend/
   routes/ controllers/    HTTP layer
   middleware/             auth (JWT, roles), validate (zod), rate limits
   services/payrollCalculator.js   pure, unit-tested payroll maths
-  scripts/                seed (guarded by DEMO_MODE) + demo lifecycle
+  scripts/                optional seed (guarded by DEMO_MODE) + demo-login bootstrap
   models/ validation/ utils/ constants/ tests/
 frontend/src/
   api/client.js           axios instance, token, cold-start state
@@ -64,7 +64,7 @@ All `/api/*` routes except `/api/health`, `/api/auth/login` and `/api/auth/demo`
 |---|---|---|
 | GET | `/api/health` | DB status (used by Render) |
 | POST | `/api/auth/login` | `{email, password}` |
-| POST | `/api/auth/demo` | demo admin token (only when `DEMO_MODE=true`) |
+| POST | `/api/auth/demo` | demo token (only when `DEMO_LOGIN=true` or `DEMO_MODE=true`); role set by `DEMO_ROLE` |
 | GET | `/api/auth/me` | current user |
 | GET/POST | `/api/employees` | list / create |
 | PUT/DELETE | `/api/employees/:id` | update / delete |
@@ -90,8 +90,8 @@ React 19, Vite, React Router, axios · Node, Express 5, Mongoose 9, zod, helmet,
 ## Known limitations
 
 - No holiday or leave model; weekends only.
-- Single shared demo database (all visitors see the same data until the daily reset).
-- Roles are `admin` and `viewer`; `viewer` is not exposed in the UI.
+- All visitors share one database; with `DEMO_ROLE=admin` their changes are visible to everyone and do not reset automatically.
+- Roles are `admin` and `viewer`; the demo login uses whichever `DEMO_ROLE` is configured, and there is no user-management UI.
 
 ## Author
 

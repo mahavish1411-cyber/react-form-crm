@@ -27,7 +27,8 @@ const login = async (req, res) => {
 
 const demoLogin = async (req, res) => {
   try {
-    if (process.env.DEMO_MODE !== "true") {
+    // DEMO_MODE=true: seeded demo DB. DEMO_LOGIN=true: one-click login on existing data.
+    if (process.env.DEMO_MODE !== "true" && process.env.DEMO_LOGIN !== "true") {
       return res.status(404).json({ success: false, message: "Not found" });
     }
     const user = await User.findOne({ isDemo: true });

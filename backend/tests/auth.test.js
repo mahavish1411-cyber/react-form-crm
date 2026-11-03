@@ -55,3 +55,22 @@ test('demoLogin returns an admin token when demo user exists', async () => {
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.user.role, 'admin');
 });
+
+test('demoLogin works with DEMO_LOGIN=true even when DEMO_MODE is not true', async () => {
+  process.env.DEMO_MODE = 'false';
+  process.env.DEMO_LOGIN = 'true';
+  User.findOne = async () => ({ _id: 'd1', email: 'demo@democrm.dev', role: 'viewer', isDemo: true });
+  const res = mockRes();
+  await demoLogin({}, res);
+  delete process.env.DEMO_LOGIN;
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.user.role, 'viewer');
+});
+
+test('demoLogin is 404 when neither DEMO_MODE nor DEMO_LOGIN is enabled', async () => {
+  process.env.DEMO_MODE = 'false';
+  delete process.env.DEMO_LOGIN;
+  const res = mockRes();
+  await demoLogin({}, res);
+  assert.equal(res.statusCode, 404);
+});
