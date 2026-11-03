@@ -6,6 +6,7 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 
+const { buildCorsOptions } = require("./utils/corsOptions");
 const connectDB = require("./config/db");
 const { describeDatabaseError } = connectDB;
 
@@ -57,7 +58,7 @@ mongoose.connection.on('disconnected', () => {
 // MIDDLEWARE
 // ==========================================
 
-app.use(cors());
+app.use(cors(buildCorsOptions(process.env.CORS_ORIGINS)));
 
 app.use(express.json());
 
