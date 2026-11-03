@@ -13,6 +13,10 @@ const { describeDatabaseError } = connectDB;
 const employeeRoutes = require("./routes/employeeRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
+const authRoutes = require("./routes/authRoutes");
+const helmet = require("helmet");
+const { requireAuth, requireWrite } = require("./middleware/auth");
+const { writeLimiter } = require("./middleware/rateLimits");
 
 const app = express();
 let databaseError = { code: 'DATABASE_CONNECTING', message: 'Database connection is starting. Please retry shortly.' };
@@ -58,6 +62,8 @@ mongoose.connection.on('disconnected', () => {
 // MIDDLEWARE
 // ==========================================
 
+app.set("trust proxy", 1);
+app.use(helmet());
 app.use(cors(buildCorsOptions(process.env.CORS_ORIGINS)));
 
 app.use(express.json());
@@ -81,6 +87,12 @@ app.use('/api', (req, res, next) => {
   }
   next();
 });
+
+// Auth (public: /login, /demo)
+app.use("/api/auth", authRoutes);
+
+// Everything below requires a valid token; non-admins are read-only.
+app.use("/api", requireAuth, requireWrite, writeLimiter);
 
 app.use(
   "/api",
