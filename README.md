@@ -108,7 +108,7 @@ The system brings together employee information, attendance records, salary stru
 ## Project Structure
 
 ```text
-react-form/
+react-form-crm/
 │
 ├── frontend/
 │   ├── public/
