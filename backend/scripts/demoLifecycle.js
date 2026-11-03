@@ -1,6 +1,7 @@
 // In-process demo lifecycle (Render's free tier has no cron jobs):
 //  - seeds once if no demo user exists
-//  - resets the demo data daily at RESET_HOUR_UTC
+//  - resets the demo data daily at RESET_HOUR_UTC, and on wake-up if older than 24h
+//    (a sleeping free-tier service misses the scheduled run)
 const RESET_HOUR_UTC = 3;
 
 function msUntilNextReset(now = new Date(), hour = RESET_HOUR_UTC) {
@@ -40,7 +41,10 @@ function startDemoLifecycle(env = process.env) {
   (async () => {
     try {
       const hasDemoUser = await User.findOne({ isDemo: true });
+      const stale =
+        hasDemoUser && Date.now() - new Date(hasDemoUser.createdAt).getTime() > 24 * 3600 * 1000;
       if (!hasDemoUser) await reseed("seeded");
+      else if (stale) await reseed("reset (stale on wake-up)");
     } catch (error) {
       console.error("Demo bootstrap failed:", error.message);
     }
