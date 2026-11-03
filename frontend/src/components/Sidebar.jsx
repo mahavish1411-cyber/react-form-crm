@@ -1,9 +1,11 @@
+import { useAuth } from "../auth/AuthContext";
 import { NavLink } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 import { readPreferences } from '../utils/workspacePreferences';
 
 const Sidebar = () => {
+  const { logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [preferences, setPreferences] = useState(readPreferences);
   useEffect(() => { const update = () => setPreferences(readPreferences()); window.addEventListener('preferences-updated', update); window.addEventListener('storage', update); return () => { window.removeEventListener('preferences-updated', update); window.removeEventListener('storage', update); }; }, []);
@@ -132,6 +134,9 @@ const Sidebar = () => {
             <span>{preferences.designation || 'Administrator'}</span>
           </div>
         )}
+        <button type="button" onClick={logout} title="Log out" aria-label="Log out" style={{marginLeft:'auto',background:'transparent',border:0,color:'inherit',cursor:'pointer',fontSize:'13px'}}>
+          {collapsed ? '⏻' : 'Log out'}
+        </button>
       </div>
     </aside>
   );

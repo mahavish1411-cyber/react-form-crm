@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import axios, { API_BASE_URL } from "../api/client";
 
-const API_BASE_URL = "http://localhost:5000/api";
-const employeeApi = axios.create({ timeout: 15000 });
 const errorMessage = (error) => error.response?.data?.message ||
   (error.code === "ECONNABORTED"
     ? "Request timed out. Refresh the employee list before retrying."
@@ -43,7 +41,7 @@ function Employees() {
   const fetchEmployees = async () => {
     try {
       setListError("");
-      const response = await employeeApi.get(
+      const response = await axios.get(
         `${API_BASE_URL}/employees`
       );
 
@@ -182,7 +180,7 @@ function Employees() {
       };
 
       if (editingId) {
-        await employeeApi.put(
+        await axios.put(
           `${API_BASE_URL}/employees/${editingId}`,
           payload
         );
@@ -191,7 +189,7 @@ function Employees() {
           "Employee Updated Successfully"
         );
       } else {
-        await employeeApi.post(
+        await axios.post(
           `${API_BASE_URL}/employees`,
           payload
         );

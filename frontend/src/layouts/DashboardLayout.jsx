@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
+import WakingBanner from "../components/WakingBanner";
 import { useEffect, useState } from "react";
 import { readPreferences } from "../utils/workspacePreferences";
 
@@ -16,6 +17,7 @@ function DashboardLayout() {
       <Sidebar />
 
       <main className="crm-main">
+        <WakingBanner />
         <Outlet />
       </main>
     </div>

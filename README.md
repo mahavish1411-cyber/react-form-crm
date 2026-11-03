@@ -1,402 +1,98 @@
-# React Form CRM
+# Employee CRM — Employees, Attendance & Payroll
 
-A full-stack Employee Management and Payroll CRM application built using **React, Node.js, Express.js, and MongoDB**.
+A full-stack HR workspace: manage employees, track daily attendance, and generate monthly payroll with printable payslips.
 
-The application provides a centralized workspace for managing employees, tracking attendance, calculating monthly payroll, generating payslips, and viewing employee-related reports.
+**One-click demo:** open the app and choose **Try the demo** on the sign-in page. No account is needed. Visitors work with the live data in the connected database.
 
-## Project Overview
+> The app runs on free-tier hosting. After a period of inactivity the first request can take up to a minute while the API wakes up, and the interface shows a notice while that happens.
 
-React Form CRM is designed to simplify day-to-day employee administration through a clean, responsive dashboard.
+## Features
 
-The system brings together employee information, attendance records, salary structures, payroll calculations, and reporting features in one application.
+- **Dashboard** — employee totals, active/inactive counts, departments, recent activity
+- **Employees** — create, edit, delete, status, department/designation, salary structure
+- **Attendance** — check-in, breaks, check-out; late / half-day / absent resolution; monthly summaries
+- **Payroll** — single or bulk generation, recalculation, paid/pending tracking, payslips (print / save as PDF)
+- **Reports, Settings, Help Center**
+- **Auth** — JWT login, one-click demo login, `admin` (full) and `viewer` (read-only) roles
+- **Safe public demo** — rate-limited writes, validated input, seeded fake data, either your existing Atlas data or a seeded, self-resetting demo database
 
-### Key Features
-
-**1. Dashboard**
-- Employee overview and summary cards
-- Total, active, and inactive employee statistics
-- Department information
-- Recent employee activity
-
-**2. Employee Management**
-- Add new employees
-- View employee information
-- Edit employee details
-- Delete employee records
-- Manage employee status
-- Department and designation management
-- Employee salary structure management
-
-**3. Attendance Management**
-- Daily attendance tracking
-- Monthly attendance summaries
-- Present, late, half-day, and absent statuses
-- Working-day calculations
-- Attendance records and filtering
-
-**4. Payroll Management**
-- Monthly payroll generation
-- Individual and bulk payroll generation
-- Basic salary and allowances
-- Attendance-based deductions
-- Fixed employee deductions
-- Other deductions
-- Automatic net salary calculation
-- Payroll recalculation
-- Payment status management
-- Paid-date tracking
-
-**5. Payslip Generation**
-- Professional employee payslip layout
-- Employee and company information
-- Monthly attendance summary
-- Earnings and deductions breakdown
-- Net salary details
-- Payslip reference number
-- Print and Save as PDF functionality
-
-**6. Reports**
-- Employee reports
-- Attendance reports
-- Payroll summaries
-- Data visualization and reporting interfaces
-
-**7. Settings and Help Center**
-- Application settings interface
-- Employee-related configuration
-- Help and support interface
-
----
-
-## Technology Stack
-
-### Frontend
-
-- React.js
-- Vite
-- JavaScript
-- HTML5
-- CSS3
-- Axios
-
-### Backend
-
-- Node.js
-- Express.js
-- MongoDB
-- Mongoose
-- dotenv
-- CORS
-
-### Development Tools
-
-- Visual Studio Code
-- Git
-- GitHub
-- MongoDB Atlas
-- MongoDB Compass
-- Postman
-
-### Deployment
-
-- Frontend: Vercel
-- Backend: Local development; production deployment pending
-- Database: MongoDB Atlas
-
----
-
-## Project Structure
+## Architecture
 
 ```text
-react-form/
-│
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   ├── package.json
-│   └── vite.config.js
-│
-├── backend/
-│   ├── config/
-│   │   └── db.js
-│   │
-│   ├── controllers/
-│   │   ├── employeeController.js
-│   │   ├── attendanceController.js
-│   │   └── payrollController.js
-│   │
-│   ├── models/
-│   │   ├── Employee.js
-│   │   ├── Attendance.js
-│   │   └── Payroll.js
-│   │
-│   ├── routes/
-│   │   ├── employeeRoutes.js
-│   │   ├── attendanceRoutes.js
-│   │   └── payrollRoutes.js
-│   │
-│   ├── server.js
-│   └── package.json
-│
-├── .gitignore
-└── README.md
+Vercel (React + Vite)  ──HTTPS──▶  Render (Express API)  ──▶  MongoDB Atlas
+        │                               │  JWT auth, validation, rate limits
+        └─ shared axios client          └─ demo login user bootstrap; optional
+           (VITE_API_URL, token,           seeded self-resetting demo mode
+            "waking up" banner)
 ```
-
----
-
-## Installation and Setup
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/mahavish1411-cyber/react-form-crm.git
-```
-
-```bash
-cd react-form-crm
-```
-
-### 2. Backend Setup
-
-Navigate to the backend directory:
-
-```bash
-cd backend
-```
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Create a `.env` file inside the backend directory.
-
-```env
-PORT=5000
-MONGODB_URI=your_mongodb_connection_string
-```
-
-Replace the placeholder with your own MongoDB Atlas connection string.
-
-Start the backend development server:
-
-```bash
-npm run dev
-```
-
-The backend runs locally on port `5000` by default.
-
-### 3. Frontend Setup
-
-Open another terminal.
-
-```bash
-cd frontend
-```
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Start the frontend:
-
-```bash
-npm run dev
-```
-
-Open the local URL displayed by Vite, usually:
 
 ```text
-http://localhost:5173
+backend/
+  server.js               app wiring, DB reconnect, health
+  routes/ controllers/    HTTP layer
+  middleware/             auth (JWT, roles), validate (zod), rate limits
+  services/payrollCalculator.js   pure, unit-tested payroll maths
+  scripts/                optional seed (guarded by DEMO_MODE) + demo-login bootstrap
+  models/ validation/ utils/ constants/ tests/
+frontend/src/
+  api/client.js           axios instance, token, cold-start state
+  auth/                   AuthContext, RequireAuth
+  pages/ components/ layouts/
 ```
 
----
+## Payroll calculation
 
-## API Endpoints
+```text
+Gross          = Basic + Allowance
+Per-day salary = Gross / (Mon–Fri days in the month)
+Attendance deduction = Per-day × absent days + Per-day × 0.5 × half-days   (capped at Gross)
+Total deduction      = Attendance + Employee fixed + Other                  (capped at Gross)
+Net            = Gross − Total deduction                                    (never below 0)
+```
 
-### Employee APIs
+- A working day with no attendance record is **absent**; under 240 worked minutes is a **half day**; any lateness above that is **late** (not deducted).
+- Past months evaluate every weekday; the current month evaluates days before today (today only if a record exists); future months have no absences.
+- Saturday and Sunday are the only non-working days (no holiday/leave model yet).
 
-| Method | Endpoint | Description |
+Example (Sept 2026, 22 weekdays): gross 33,000 → 1,500/day; 2 absent + 1 half-day → 3,750 attendance deduction.
+
+## API
+
+All `/api/*` routes except `/api/health`, `/api/auth/login` and `/api/auth/demo` require `Authorization: Bearer <token>`. `viewer` tokens can only `GET`.
+
+| Method | Endpoint | Notes |
 |---|---|---|
-| GET | `/api/employees` | Fetch employees |
-| POST | `/api/employees` | Create employee |
-| PUT | `/api/employees/:id` | Update employee |
-| DELETE | `/api/employees/:id` | Delete employee |
+| GET | `/api/health` | DB status (used by Render) |
+| POST | `/api/auth/login` | `{email, password}` |
+| POST | `/api/auth/demo` | demo token (only when `DEMO_LOGIN=true` or `DEMO_MODE=true`); role set by `DEMO_ROLE` |
+| GET | `/api/auth/me` | current user |
+| GET/POST | `/api/employees` | list / create |
+| PUT/DELETE | `/api/employees/:id` | update / delete |
+| GET | `/api/attendance`, `/api/attendance/monthly` | daily / monthly |
+| POST / PUT | `/api/attendance/check-in`, `start-break`, `end-break`, `check-out` | |
+| GET | `/api/payroll?month=YYYY-MM&paymentStatus=Pending\|Paid` | validated |
+| GET | `/api/payroll/:id` | |
+| POST | `/api/payroll/generate`, `/api/payroll/generate-all` | |
+| PUT | `/api/payroll/:id/recalculate`, `/api/payroll/:id/paid` | |
 
-### Attendance APIs
+## Run locally
 
-Attendance endpoints are available under:
+See [docs/DEPLOY.md](docs/DEPLOY.md#local-development). Tests: `npm test --prefix backend`.
 
-```text
-/api/attendance
-```
+## Deploy
 
-They support attendance records and monthly attendance-related operations.
+Step-by-step (Atlas + Render + Vercel): [docs/DEPLOY.md](docs/DEPLOY.md).
 
-### Payroll APIs
+## Tech
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/payroll?month=YYYY-MM` | Fetch monthly payroll |
-| GET | `/api/payroll/:id` | Fetch payroll details |
-| POST | `/api/payroll/generate` | Generate employee payroll |
-| POST | `/api/payroll/generate-all` | Generate payroll for employees |
-| PUT | `/api/payroll/:id/recalculate` | Recalculate payroll |
-| PUT | `/api/payroll/:id/paid` | Mark payroll as paid |
+React 19, Vite, React Router, axios · Node, Express 5, Mongoose 9, zod, helmet, express-rate-limit, jsonwebtoken, bcryptjs · MongoDB Atlas · Node test runner.
 
----
+## Known limitations
 
-## Payroll Calculation
-
-The payroll module calculates monthly salary using employee salary information and attendance records.
-
-### Earnings
-
-```text
-Gross Salary = Basic Salary + Allowance
-```
-
-### Deductions
-
-```text
-Total Deduction =
-Attendance Deduction
-+ Employee Deduction
-+ Other Deduction
-```
-
-### Net Salary
-
-```text
-Net Salary = Gross Salary - Total Deduction
-```
-
-Attendance deductions are calculated using scheduled working days and applicable attendance records.
-
-The current working-day configuration treats Monday through Friday as working days and Saturday and Sunday as holidays.
-
----
-
-## Employee Salary Structure
-
-Each employee can have an individual salary configuration.
-
-| Component | Description |
-|---|---|
-| Basic Salary | Employee's base monthly salary |
-| Allowance | Additional monthly earnings |
-| Employee Deduction | Fixed employee-level deduction |
-| Gross Salary | Basic salary plus allowance |
-| Net Salary | Salary after applicable deductions |
-
-Employee salary details are stored in MongoDB and used during payroll generation.
-
----
-
-## Database
-
-The application uses MongoDB Atlas with Mongoose for database operations.
-
-Primary collections:
-
-```text
-employees
-attendances
-payrolls
-```
-
-The application connects to MongoDB through environment variables.
-
-Database credentials must never be committed to the repository.
-
----
-
-## Frontend Deployment
-
-The React frontend is deployed using Vercel.
-
-Deployment configuration:
-
-| Setting | Value |
-|---|---|
-| Framework | Vite |
-| Root Directory | frontend |
-| Build Command | npm run build |
-| Output Directory | dist |
-
-**Deployment status:** Frontend deployed successfully.
-
-**Backend deployment:** Pending.
-
-Until the backend is deployed and connected, features requiring live API data may not function on the hosted frontend.
-
----
-
-## Security Notes
-
-This application manages employee information and payroll data.
-
-Before using the application in production:
-
-- Implement authentication and role-based authorization.
-- Protect employee and payroll API endpoints.
-- Configure appropriate CORS restrictions.
-- Use secure environment variables.
-- Never expose MongoDB credentials.
-- Use a separate database with sample data for public demonstrations.
-- Validate and sanitize API input.
-- Configure database permissions appropriately.
-
-**Current status:** Development/demo project. Production security hardening is required.
-
----
-
-## Future Improvements
-
-- User authentication and login
-- Admin and employee roles
-- Role-based access control
-- Production backend deployment
-- Email notifications
-- Advanced reporting
-- Employee self-service portal
-- Payroll export features
-- Automated testing
-
----
-
-## Project Status
-
-| Module | Status |
-|---|---|
-| Dashboard | Implemented |
-| Employee Management | Implemented |
-| Attendance Management | Implemented |
-| Payroll Management | Implemented |
-| Payslip Generation | Implemented |
-| Reports | Implemented |
-| Settings | Implemented |
-| Help Center | Implemented |
-| MongoDB Connection | Working locally |
-| Frontend Deployment | Deployed |
-| Production Backend | Pending |
-| Authentication & Authorization | Pending |
-
----
+- No holiday or leave model; weekends only.
+- All visitors share one database; with `DEMO_ROLE=admin` their changes are visible to everyone and do not reset automatically.
+- Roles are `admin` and `viewer`; the demo login uses whichever `DEMO_ROLE` is configured, and there is no user-management UI.
 
 ## Author
 
-**GitHub:** mahavish1411-cyber
-
-**Repository:** react-form-crm
-
----
-
-## License
-
-No open-source license has been specified for this repository.
-
-All rights reserved unless otherwise stated.
+GitHub: mahavish1411-cyber

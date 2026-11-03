@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import axios, { API_BASE_URL } from '../api/client';
 import './Reports.css';
 import { readPreferences } from '../utils/workspacePreferences';
 
@@ -19,7 +19,7 @@ export default function Reports() {
  const [refresh,setRefresh]=useState(0); const [view,setView]=useState(()=>{try{const type=JSON.parse(localStorage.getItem('crm-settings'))?.report;return reports[type]?type:null;}catch{return null;}});
  const [search,setSearch]=useState(''); const [department,setDepartment]=useState(''); const [page,setPage]=useState(1);
  useEffect(()=>{
-  const controller=new AbortController(); const base=import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+  const controller=new AbortController(); const base=API_BASE_URL;
   Promise.all(['employees','attendance/monthly','payroll'].map(path=>axios.get(`${base}/${path}`,{params:path==='employees'?{}:{month},signal:controller.signal}))).then(([e,a,p])=>{
    const directory=new Map((e.data.data || []).map(employee=>[employee._id,employee]));
    const normalize=rows=>rows.map(r=>{const employee=directory.get(r.employee?._id || r.employee) || r.employee || {};return {...r,name:employee.name || 'Deleted employee',department:employee.department || 'Unassigned',finalStatus:r.finalStatus || 'In progress'};});

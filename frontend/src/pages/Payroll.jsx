@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import axios, { API_BASE_URL } from "../api/client";
 
-const API_BASE_URL = "http://localhost:5000/api";
 
 const COMPANY = {
   name: "ARTIC9",
