@@ -2,14 +2,9 @@
 
 A full-stack HR workspace: manage employees, track daily attendance, and generate monthly payroll with printable payslips.
 
-**Live demo:** _add your Vercel URL here_ → click **Try the demo** (no sign-up). Demo data is fake and **resets daily**.
+**One-click demo:** open the app and choose **Try the demo** on the sign-in page. No account is needed. Demo data is fictional and resets automatically every day.
 
-> Hosted on free tiers: the first request after idle can take up to a minute while the API wakes up. A banner tells you when that happens.
-
-<!-- Add screenshots to docs/screenshots/ and link them here:
-![Dashboard](docs/screenshots/dashboard.png)
-![Payroll](docs/screenshots/payroll.png)
--->
+> The app runs on free-tier hosting. After a period of inactivity the first request can take up to a minute while the API wakes up, and the interface shows a notice while that happens.
 
 ## Features
 
