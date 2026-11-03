@@ -54,10 +54,12 @@ The script refuses to run unless `DEMO_MODE` is exactly `true`.
 
 ## Local development
 
+> **Warning:** with `DEMO_MODE=true` the server **wipes and re-seeds** the database it connects to (employees, attendance, payroll and users) on first start and daily after that. Only ever use it with a throwaway database such as `crm_demo_local`, never one that holds data you care about.
+
 ```bash
 # backend/.env (see backend/.env.example)
 PORT=5000
-MONGODB_URI=mongodb://127.0.0.1:27017/crm_dev
+MONGODB_URI=mongodb://127.0.0.1:27017/crm_demo_local   # throwaway database
 JWT_SECRET=dev-secret
 DEMO_MODE=true
 CORS_ORIGINS=http://localhost:5173
@@ -68,3 +70,5 @@ cd backend && npm install && npm run dev
 cd frontend && npm install && npm run dev
 npm test --prefix backend
 ```
+
+Then open http://localhost:5173 and click **Try the demo**.

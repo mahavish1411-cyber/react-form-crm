@@ -65,7 +65,20 @@ function Login() {
     setBusy(true);
     setError("");
     try {
-      await action();
+      // A sleeping free-tier server answers 503/network errors while it wakes
+      // up and its database connects; retry for up to ~75s instead of failing.
+      const MAX_ATTEMPTS = 15;
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          await action();
+          break;
+        } catch (err) {
+          const status = err.response?.status;
+          const retryable = !err.response || [502, 503, 504].includes(status);
+          if (!retryable || attempt >= MAX_ATTEMPTS) throw err;
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+      }
       navigate("/", { replace: true });
     } catch (err) {
       setError(
